@@ -1,0 +1,20 @@
+{
+  "name": "jamhijau-auth-service",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Auth service JamHijau: registrasi, login JWT, dan API key untuk kelompok lain",
+  "type": "module",
+  "main": "src/server.js",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "start": "node --disable-warning=ExperimentalWarning src/server.js",
+    "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2"
+  }
+}

@@ -1,0 +1,70 @@
+# JamHijau: gateway + auth-service + core-service (+ tunnel di STB).
+# Lokal :  docker compose up -d --build            -> http://127.0.0.1:8080/api/health
+# STB   :  docker compose --profile stb up -d --build
+name: jamhijau
+
+services:
+  gateway:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    # Hanya untuk cek lokal / di STB lewat SSH. Tidak terbuka ke jaringan luar.
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      core-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    mem_limit: 64m
+    cpus: 0.25
+
+  auth-service:
+    build: ./auth-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      AUTH_DB_PATH: /data/auth.db
+    volumes:
+      - auth-data:/data
+    mem_limit: 128m
+    cpus: 0.25
+    # Tidak ada `ports:`. Hanya gateway dan core-service yang memanggilnya.
+
+  core-service:            # dari docs/compose-core-service.snippet.yml (Anggota N)
+    build: ./core-service
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      CORE_DB_PATH: /data/core.db
+      AUTH_INTERNAL_URL: http://auth-service:3001
+    volumes:
+      - core-data:/data
+    mem_limit: 256m
+    cpus: 0.5
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["stb"]      # hanya jalan dengan --profile stb
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    env_file: .env         # cloudflared membaca TUNNEL_TOKEN dari .env
+    depends_on:
+      gateway:
+        condition: service_healthy
+    mem_limit: 64m
+    cpus: 0.25
+
+volumes:
+  auth-data:
+  core-data:

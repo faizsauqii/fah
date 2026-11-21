@@ -1,7 +1,7 @@
 # Deploy JamHijau di STB (Anggota S)
 
 ## Arsitektur
-Internet -> Cloudflare (jamhijau.stei.site) -> `tunnel` (cloudflared) -> `gateway` (Nginx :80)
+Internet -> Cloudflare (fah.stei.site) -> `tunnel` (cloudflared) -> `gateway` (Nginx :80)
 -> `/api/auth/*` ke `auth-service:3001`, `/api/*` lain ke `core-service:3000`.
 Hanya `tunnel` yang keluar ke internet. Tidak ada port database yang dibuka.
 Port `127.0.0.1:8080` di gateway hanya untuk cek dari dalam STB (lewat SSH).
@@ -22,20 +22,20 @@ Semua service: `restart: unless-stopped`, data SQLite di named volume `auth-data
    - `INTERNAL_TOKEN`: jalankan perintah yang sama sekali lagi (harus beda dari `JWT_SECRET`)
    - `ADMIN_PASSWORD`, `DEMO_PASSWORD`: password kuat
    - `TUNNEL_TOKEN`: dari Cloudflare Zero Trust > Networks > Tunnels.
-     Public Hostname `jamhijau.stei.site` -> Service `http://gateway:80`.
+     Public Hostname `fah.stei.site` -> Service `http://gateway:80`.
 3. `docker compose --profile stb up -d --build`
 4. Cek: `docker compose ps` (semua healthy), lalu
-   `curl http://127.0.0.1:8080/api/health` dan `curl https://jamhijau.stei.site/api/health`.
+   `curl http://127.0.0.1:8080/api/health` dan `curl https://fah.stei.site/api/health`.
 
 ## Update kode
 `git pull && docker compose --profile stb up -d --build`
 
 ## Menerbitkan API key untuk kelompok lain
 ```sh
-TOKEN=$(curl -s -X POST https://jamhijau.stei.site/api/auth/login \
+TOKEN=$(curl -s -X POST https://fah.stei.site/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"<ADMIN_EMAIL>","password":"<ADMIN_PASSWORD>"}' | jq -r .accessToken)
-curl -s -X POST https://jamhijau.stei.site/api/auth/api-keys \
+curl -s -X POST https://fah.stei.site/api/auth/api-keys \
   -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
   -d '{"group":"nama-kelompok","contact":"email@std.stei.itb.ac.id"}'
 ```

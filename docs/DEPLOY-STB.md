@@ -17,7 +17,7 @@ Semua service: `restart: unless-stopped`, data SQLite di named volume `auth-data
 
 ## Langkah pertama kali
 1. Cek STB: `./scripts/cek-stb.sh` (perlu `aarch64`/`x86_64`, Docker + plugin compose).
-2. `git clone <repo> && cd jamhijau && cp .env.example .env`, lalu isi `.env`:
+2. `git clone https://github.com/faizsauqii/fah.git && cd fah && cp .env.example .env`, lalu isi `.env`:
    - `JWT_SECRET`: `openssl rand -base64 48`
    - `INTERNAL_TOKEN`: jalankan perintah yang sama sekali lagi (harus beda dari `JWT_SECRET`)
    - `ADMIN_PASSWORD`, `DEMO_PASSWORD`: password kuat
@@ -43,7 +43,7 @@ Key (`jh_...`) hanya tampil sekali. Daftar: `GET /api/auth/api-keys`, cabut: `DE
 
 ## Backup
 `./scripts/backup.sh` menyalin `auth.db` dan `core.db` ke `backups/` (7 salinan terakhir disimpan).
-Cron harian jam 02.00: `0 2 * * * cd ~/jamhijau && ./scripts/backup.sh >> backups/backup.log 2>&1`
+Cron harian jam 02.00: `0 2 * * * cd ~/fah && ./scripts/backup.sh >> backups/backup.log 2>&1`
 
 ## Rate limit (gateway)
 | Pemanggil | Batas |

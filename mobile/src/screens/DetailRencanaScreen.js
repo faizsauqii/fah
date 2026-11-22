@@ -57,9 +57,10 @@ export default function DetailRencanaScreen({ route, navigation }) {
               <Text style={styles.green}>
                 {clockFromIso(data.recommendation.start)} – {clockFromIso(data.recommendation.end)}
               </Text>
-            ) : (
+            ) : data?.coverage === "NONE" ? null : (
               <Text style={styles.muted}>Tidak ada jam hijau di rentang ini. Pertimbangkan waktu atau lokasi lain.</Text>
             )}
+            {data?.message ? <Text style={styles.muted}>{data.message}</Text> : null}
             {(data?.hours ?? []).map((h) => (
               <View key={h.time} style={styles.hourRow}>
                 <Text style={styles.hour}>{clockFromIso(h.time)}</Text>

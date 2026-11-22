@@ -1,0 +1,769 @@
+openapi: 3.0.3
+info:
+  title: JamHijau API (kelompok fah)
+  version: 1.0.0
+  description: |
+    JamHijau memberi tahu kapan aman beraktivitas di luar ruangan. Setiap jam dinilai
+    **HIJAU** (aman), **KUNING** (waspada, batasi aktivitas berat), atau **MERAH** (hindari),
+    berdasarkan PM2.5, PM10, indeks UV, suhu, dan kelembapan dari Open-Meteo, disesuaikan dengan
+    profil kesehatan (`umum`, `asma`, `lansia`, `ibu_hamil`, `anak`).
+
+    **Autentikasi**
+    - Pengguna aplikasi: `Authorization: Bearer <accessToken>` dari `POST /auth/login` atau `POST /auth/register`.
+    - Kelompok lain (server ke server): header `X-API-Key: jh_...`. Minta key ke kelompok fah.
+    - `GET /risk` dan `GET /profiles` boleh tanpa autentikasi (rate limit lebih ketat).
+    - Jika `Authorization` dan `X-API-Key` dikirim bersamaan, yang dipakai JWT.
+
+    **Batas pemanggilan (gateway Nginx)**: tanpa key 30 permintaan/menit per IP (burst 10);
+    dengan `X-API-Key` 120/menit per key (burst 30); `/auth/login` dan `/auth/register` 10/menit per IP (burst 5).
+    Melebihi batas menghasilkan `429 RATE_LIMITED`.
+
+    **Konvensi**: JSON camelCase, ID UUID v4, waktu ISO 8601 dengan offset zona waktu lokasi
+    (mis. `2026-11-23T06:00:00+07:00`). Semua error memakai format `{ "error": { "code", "message", "details" } }`.
+
+    **Dasar penilaian risiko**: ISPU PM2.5/PM10 (Permen LHK No. P.14/MENLHK/SETJEN/KUM.1/7/2020;
+    konsentrasi per jam dipakai sebagai indikasi), WHO Global Solar UV Index (2002), dan heat index NOAA/NWS.
+    Jika data tidak tersedia, tingkat risiko jam tersebut bernilai `null` (tidak ditebak).
+  contact:
+    name: Kelompok fah (K02) - II3160 TST x II3140 PWAM
+    url: https://github.com/faizsauqii/fah
+servers:
+  - url: https://fah.stei.site/api
+    description: Server publik (STB via Cloudflare Tunnel)
+  - url: http://127.0.0.1:8080/api
+    description: Lokal (docker compose di laptop)
+tags:
+  - name: Status
+  - name: Akun
+    description: Dilayani auth-service.
+  - name: Penilaian Risiko
+    description: Open host service untuk kelompok lain.
+  - name: Profil Pengguna
+  - name: Rencana Aktivitas
+paths:
+  /health:
+    get:
+      tags: [Status]
+      summary: Status gateway
+      security: []
+      responses:
+        '200':
+          description: Gateway hidup.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  service: { type: string, example: gateway }
+  /core/health:
+    get:
+      tags: [Status]
+      summary: Status core-service dan database-nya
+      security: []
+      responses:
+        '200':
+          description: Sehat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceHealth' }
+        '503':
+          description: Database bermasalah.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceHealth' }
+  /auth/health:
+    get:
+      tags: [Status]
+      summary: Status auth-service dan database-nya
+      security: []
+      responses:
+        '200':
+          description: Sehat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceHealth' }
+        '503':
+          description: Database bermasalah.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ServiceHealth' }
+
+  /auth/register:
+    post:
+      tags: [Akun]
+      summary: Daftar akun baru (langsung masuk)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password, name]
+              properties:
+                email: { type: string, format: email, example: budi@contoh.com }
+                password: { type: string, minLength: 8, example: rahasia123 }
+                name: { type: string, minLength: 1, maxLength: 80, example: Budi Santoso }
+      responses:
+        '201':
+          description: Akun dibuat; respons sudah berisi token.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400':
+          description: |
+            `VALIDATION_ERROR`. `details[].issue`: `invalid_format` (email), `too_short` (password),
+            `required_max_80` (name).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/login:
+    post:
+      tags: [Akun]
+      summary: Masuk dan dapatkan JWT (berlaku 7 hari)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: demo@fah.stei.site }
+                password: { type: string, example: password-akun-uji }
+      responses:
+        '200':
+          description: Berhasil masuk.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: '`UNAUTHENTICATED`, pesan "Email atau password salah."'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /auth/me:
+    get:
+      tags: [Akun]
+      summary: Data akun yang sedang masuk
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Data akun.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /auth/api-keys:
+    post:
+      tags: [Akun]
+      summary: Terbitkan API key untuk kelompok lain (admin)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group, contact]
+              properties:
+                group: { type: string, pattern: '^[a-z0-9-]{2,40}$', example: sehatdekat }
+                contact: { type: string, maxLength: 120, example: kontak@contoh.com }
+                tier: { type: string, enum: [partner], default: partner }
+      responses:
+        '201':
+          description: Key baru. Key asli hanya ditampilkan sekali.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  group: { type: string }
+                  tier: { type: string }
+                  apiKey: { type: string, example: jh_Q2xhc3NpY0phbUhpamF1S2V5MDAx }
+                  note: { type: string }
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    get:
+      tags: [Akun]
+      summary: Daftar API key (admin, tanpa key asli)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daftar key.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKeys:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        keyPrefix: { type: string, example: jh_Q2xh }
+                        group: { type: string }
+                        contact: { type: string }
+                        tier: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        revokedAt: { type: string, format: date-time, nullable: true }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /auth/api-keys/{id}:
+    delete:
+      tags: [Akun]
+      summary: Cabut API key (admin)
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204':
+          description: Dicabut.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /profiles:
+    get:
+      tags: [Penilaian Risiko]
+      summary: Daftar profil kesehatan yang dikenali
+      security:
+        - {}
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: Lima profil. `sensitive` = memakai ambang lebih ketat.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items: { $ref: '#/components/schemas/Profile' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+  /risk:
+    get:
+      tags: [Penilaian Risiko]
+      summary: Prakiraan risiko 24 jam dan jam hijau untuk satu titik
+      description: |
+        Menilai 24 jam mulai jam sekarang (waktu lokal lokasi). Koordinat dibulatkan ke 2 desimal
+        (sekitar 1 km) dan data Open-Meteo di-cache 60 menit per area.
+
+        Aturan per profil:
+        - Udara (ISPU): umum Baik/Sedang = HIJAU, Tidak Sehat = KUNING, Sangat Tidak Sehat/Berbahaya = MERAH;
+          profil rentan Sedang/Tidak Sehat = KUNING.
+        - UV (dibulatkan): 0-2 HIJAU, 3-7 KUNING, 8+ MERAH.
+        - Heat index NWS: umum Caution = HIJAU, Extreme Caution = KUNING, Danger+ = MERAH;
+          profil rentan satu kategori lebih ketat.
+        - Tingkat jam = faktor terburuk. Jam hijau = rentang HIJAU terpanjang pukul 05.00-21.00 lokal.
+      security:
+        - {}
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          schema: { type: number, minimum: -90, maximum: 90, example: -6.8915 }
+        - name: lon
+          in: query
+          required: true
+          schema: { type: number, minimum: -180, maximum: 180, example: 107.6107 }
+        - name: profile
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/ProfileValue' }
+      responses:
+        '200':
+          description: Penilaian risiko.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RiskResponse' }
+        '400':
+          description: '`VALIDATION_ERROR`. `details[].issue`: `required`, `invalid_format`, `out_of_range`, `invalid_value`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+  /me/health-profile:
+    get:
+      tags: [Profil Pengguna]
+      summary: Profil kesehatan pengguna (bawaan umum)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profil saat ini. `updatedAt` null jika belum pernah diatur.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthProfile' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    put:
+      tags: [Profil Pengguna]
+      summary: Ubah profil kesehatan
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [profile]
+              properties:
+                profile: { $ref: '#/components/schemas/ProfileValue' }
+      responses:
+        '200':
+          description: Profil tersimpan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HealthProfile' }
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /me/locations:
+    get:
+      tags: [Profil Pengguna]
+      summary: Daftar lokasi tersimpan
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Lokasi milik pengguna.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  locations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Location' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Profil Pengguna]
+      summary: Tambah lokasi tersimpan (maks. 50 per pengguna)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocationInput' }
+      responses:
+        '201':
+          description: Lokasi dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        '400':
+          description: '`VALIDATION_ERROR`. `details[].issue`: `required`, `too_long`, `invalid_format`, `out_of_range`.'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/locations/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Profil Pengguna]
+      summary: Ubah lokasi tersimpan
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LocationInput' }
+      responses:
+        '200':
+          description: Lokasi diperbarui.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Location' }
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Profil Pengguna]
+      summary: Hapus lokasi (rencana di lokasi ini ikut terhapus)
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/plans:
+    get:
+      tags: [Rencana Aktivitas]
+      summary: Daftar rencana aktivitas
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Rencana milik pengguna, urut waktu mulai.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  plans:
+                    type: array
+                    items: { $ref: '#/components/schemas/Plan' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags: [Rencana Aktivitas]
+      summary: Buat rencana aktivitas (maks. 24 jam, maks. 100 per pengguna)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanInput' }
+      responses:
+        '201':
+          description: Rencana dibuat. Waktu dikembalikan dengan offset yang sama seperti `startAt`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Plan' }
+        '400':
+          description: |
+            `VALIDATION_ERROR`. `details[].issue`: `required`, `too_long`, `invalid_format`,
+            `not_found` (locationId bukan milik pengguna), `out_of_range` (endAt tidak setelah startAt).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /me/plans/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    delete:
+      tags: [Rencana Aktivitas]
+      summary: Hapus rencana
+      security:
+        - BearerAuth: []
+      responses:
+        '204':
+          description: Dihapus.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /me/plans/{id}/recommendation:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Rencana Aktivitas]
+      summary: Saran jam hijau terbaik di dalam rentang rencana
+      description: |
+        Memakai profil kesehatan pengguna dan prakiraan Open-Meteo (sekitar 5 hari ke depan).
+        `coverage`: `FULL` (semua jam tersedia), `PARTIAL`, atau `NONE` (di luar jangkauan prakiraan;
+        `recommendation` null dan `message` menjelaskan).
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Rekomendasi.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Recommendation' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/Unavailable'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: 'JWT HS256 dari auth-service (iss `jamhijau-auth`, aud `jamhijau`, berlaku 7 hari).'
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: Untuk kelompok lain. Format `jh_` + 32 karakter.
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  responses:
+    ValidationError:
+      description: '`VALIDATION_ERROR`, dengan `details` per field.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: '`UNAUTHENTICATED` (tidak ada token), `INVALID_TOKEN`, atau `INVALID_API_KEY`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: '`FORBIDDEN`, hanya admin.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: '`NOT_FOUND`. Data milik pengguna lain juga dijawab 404.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: '`CONFLICT` (email sudah terdaftar, atau batas jumlah data tercapai).'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: '`RATE_LIMITED` dari gateway. Header `Retry-After: 60`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unavailable:
+      description: '`UPSTREAM_UNAVAILABLE` (Open-Meteo tidak bisa dihubungi) atau `AUTH_UNAVAILABLE`.'
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: Parameter tidak valid.
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  field: { type: string, example: lat }
+                  issue: { type: string, example: out_of_range }
+    ServiceHealth:
+      type: object
+      properties:
+        status: { type: string, enum: [ok, degraded] }
+        service: { type: string, example: core-service }
+        database: { type: string, enum: [ok, error] }
+        time: { type: string, format: date-time }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        role: { type: string, enum: [user, admin] }
+    TokenResponse:
+      type: object
+      properties:
+        accessToken: { type: string }
+        tokenType: { type: string, example: Bearer }
+        expiresIn: { type: integer, example: 604800 }
+        user: { $ref: '#/components/schemas/User' }
+    ProfileValue:
+      type: string
+      enum: [umum, asma, lansia, ibu_hamil, anak]
+      default: umum
+    Profile:
+      type: object
+      properties:
+        value: { $ref: '#/components/schemas/ProfileValue' }
+        label: { type: string, example: Asma / penyakit paru }
+        sensitive: { type: boolean }
+    Level:
+      type: string
+      enum: [HIJAU, KUNING, MERAH]
+      nullable: true
+      description: null jika ada data yang tidak tersedia.
+    RiskHour:
+      type: object
+      properties:
+        time: { type: string, format: date-time, example: '2026-11-23T06:00:00+07:00' }
+        level: { $ref: '#/components/schemas/Level' }
+        pm25: { type: number, nullable: true, description: µg/m³ }
+        pm10: { type: number, nullable: true, description: µg/m³ }
+        uvIndex: { type: number, nullable: true }
+        temperature: { type: number, nullable: true, description: °C }
+        humidity: { type: number, nullable: true, description: '%' }
+        heatIndex: { type: number, nullable: true, description: °C }
+        ispu: { type: integer, nullable: true }
+        ispuCategory:
+          type: string
+          nullable: true
+          enum: [Baik, Sedang, Tidak Sehat, Sangat Tidak Sehat, Berbahaya]
+        factors:
+          type: object
+          properties:
+            air:
+              type: object
+              nullable: true
+              properties:
+                level: { $ref: '#/components/schemas/Level' }
+                ispu: { type: integer }
+                category: { type: string }
+                criticalParameter: { type: string, enum: [pm25, pm10] }
+            uv:
+              type: object
+              nullable: true
+              properties:
+                level: { $ref: '#/components/schemas/Level' }
+                uvIndex: { type: integer }
+            heat:
+              type: object
+              nullable: true
+              properties:
+                level: { $ref: '#/components/schemas/Level' }
+                heatIndex: { type: number }
+                category: { type: string, enum: [NORMAL, CAUTION, EXTREME_CAUTION, DANGER, EXTREME_DANGER] }
+        missing:
+          type: array
+          items: { type: string, enum: [air, uv, heat] }
+    TimeWindow:
+      type: object
+      nullable: true
+      properties:
+        start: { type: string, format: date-time }
+        end: { type: string, format: date-time }
+        hours: { type: integer }
+    RiskLocation:
+      type: object
+      properties:
+        lat: { type: number, example: -6.89 }
+        lon: { type: number, example: 107.61 }
+        timezone: { type: string, example: Asia/Jakarta }
+    RiskResponse:
+      type: object
+      properties:
+        location: { $ref: '#/components/schemas/RiskLocation' }
+        profile: { $ref: '#/components/schemas/ProfileValue' }
+        generatedAt: { type: string, format: date-time }
+        greenWindow: { $ref: '#/components/schemas/TimeWindow' }
+        hours:
+          type: array
+          items: { $ref: '#/components/schemas/RiskHour' }
+        basis:
+          type: array
+          items: { type: string }
+        source: { type: string }
+    HealthProfile:
+      type: object
+      properties:
+        profile: { $ref: '#/components/schemas/ProfileValue' }
+        updatedAt: { type: string, format: date-time, nullable: true }
+    LocationInput:
+      type: object
+      required: [name, lat, lon]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 80, example: Taman Ganesha }
+        lat: { type: number, minimum: -90, maximum: 90, example: -6.8915 }
+        lon: { type: number, minimum: -180, maximum: 180, example: 107.6107 }
+    Location:
+      allOf:
+        - $ref: '#/components/schemas/LocationInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            createdAt: { type: string, format: date-time }
+            updatedAt: { type: string, format: date-time }
+    PlanInput:
+      type: object
+      required: [title, locationId, startAt, endAt]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 80, example: Jalan pagi }
+        locationId: { type: string, format: uuid }
+        startAt: { type: string, format: date-time, example: '2026-11-28T05:00:00+07:00' }
+        endAt: { type: string, format: date-time, example: '2026-11-28T09:00:00+07:00' }
+    Plan:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        locationId: { type: string, format: uuid }
+        locationName: { type: string }
+        startAt: { type: string, format: date-time }
+        endAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    Recommendation:
+      type: object
+      properties:
+        planId: { type: string, format: uuid }
+        location: { $ref: '#/components/schemas/RiskLocation' }
+        profile: { $ref: '#/components/schemas/ProfileValue' }
+        coverage: { type: string, enum: [FULL, PARTIAL, NONE] }
+        recommendation: { $ref: '#/components/schemas/TimeWindow' }
+        hours:
+          type: array
+          items: { $ref: '#/components/schemas/RiskHour' }
+        basis:
+          type: array
+          items: { type: string }
+        message: { type: string, nullable: true }

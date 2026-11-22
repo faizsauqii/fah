@@ -7,6 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --no-audit --no-fund && npm cache clean --force
 
 COPY src ./src
+COPY openapi.yaml ./
 
 RUN mkdir -p /data && chown node:node /data
 USER node

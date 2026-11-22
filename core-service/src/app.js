@@ -1,13 +1,15 @@
 import express from 'express';
 import { healthRouter } from './routes/health.js';
 import { riskRouter } from './routes/risk.js';
-import { placeholderRouter } from './routes/placeholders.js';
+import { meRouter } from './routes/me.js';
+import { docsRouter } from './routes/docs.js';
 import { errorHandler, notFoundHandler } from './errors.js';
 import { authenticate } from './middleware/auth.js';
 import { createAuthClient } from './clients/authClient.js';
 import { createOpenMeteoClient } from './clients/openMeteoClient.js';
 import { createEnvCache } from './services/envCache.js';
 import { createRiskService } from './services/riskService.js';
+import { createMeStore } from './services/meStore.js';
 
 export function createApp({ config, db, openMeteo, authClient, now = () => Date.now() }) {
   const app = express();
@@ -39,9 +41,10 @@ export function createApp({ config, db, openMeteo, authClient, now = () => Date.
   });
 
   app.use(healthRouter({ db }));
+  app.use(docsRouter());
   app.use('/api', authenticate({ jwt: config.jwt, authClient: apiKeyClient }));
   app.use(riskRouter({ riskService }));
-  app.use(placeholderRouter());
+  app.use(meRouter({ store: createMeStore({ db, now }), riskService }));
 
   app.use(notFoundHandler);
   app.use(errorHandler);

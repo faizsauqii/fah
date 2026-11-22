@@ -128,8 +128,8 @@ test('/api/me dengan API key saja -> 401 UNAUTHENTICATED', async () => {
   assert.deepEqual(await call('/api/me/locations', { 'x-api-key': 'jh_valid' }), { status: 401, code: 'UNAUTHENTICATED' });
 });
 
-test('/api/me dengan JWT valid lolos autentikasi (endpoint masih 501)', async () => {
-  assert.deepEqual(await call('/api/me/locations', { authorization: `Bearer ${sign()}` }), { status: 501, code: 'NOT_IMPLEMENTED' });
+test('/api/me dengan JWT valid lolos autentikasi', async () => {
+  assert.deepEqual(await call('/api/me/locations', { authorization: `Bearer ${sign()}` }), { status: 200, code: undefined });
 });
 
 test('/api/core/health tetap bisa diakses tanpa autentikasi', async () => {

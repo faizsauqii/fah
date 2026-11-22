@@ -36,12 +36,12 @@ test('GET /api/core/health bisa diakses lewat prefix /api', async () => {
   assert.equal(res.status, 200);
 });
 
-test('endpoint yang belum dibuat menjawab 501 dengan format error bersama', async () => {
+test('endpoint /api/me tanpa token menjawab 401 dengan format error bersama', async () => {
   const res = await fetch(`${baseUrl}/api/me/health-profile`);
-  assert.equal(res.status, 501);
+  assert.equal(res.status, 401);
   const body = await res.json();
   assert.deepEqual(Object.keys(body), ['error']);
-  assert.equal(body.error.code, 'NOT_IMPLEMENTED');
+  assert.equal(body.error.code, 'UNAUTHENTICATED');
   assert.equal(typeof body.error.message, 'string');
 });
 

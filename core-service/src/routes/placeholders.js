@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { errors } from '../errors.js';
+import { requireUser } from '../middleware/auth.js';
 
 export function placeholderRouter() {
   const router = Router();
   const notYet = (_req, _res, next) => next(errors.notImplemented());
+
+  router.use('/api/me', requireUser);
 
   router.get('/api/me/health-profile', notYet);
   router.put('/api/me/health-profile', notYet);

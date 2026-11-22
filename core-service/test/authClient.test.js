@@ -32,7 +32,7 @@ before(async () => {
       }
       const { apiKey } = JSON.parse(raw);
       if (apiKey === VALID_KEY) {
-        return send(200, { valid: true, keyId: 'k-1', group: 'sehatdekat', tier: 'partner' });
+        return send(200, { valid: true, keyId: 'k-1', group: 'g-1', tier: 'partner' });
       }
       return send(200, { valid: false });
     });
@@ -51,7 +51,7 @@ beforeEach(() => {
 test('mengirim header X-Internal-Token dan menerima key valid', async () => {
   const client = createAuthClient({ internalUrl: baseUrl, internalToken: TOKEN, logger: silentLogger });
   const result = await client.verifyApiKey(VALID_KEY);
-  assert.deepEqual(result, { valid: true, keyId: 'k-1', group: 'sehatdekat', tier: 'partner' });
+  assert.deepEqual(result, { valid: true, keyId: 'k-1', group: 'g-1', tier: 'partner' });
   assert.equal(lastHeaders['x-internal-token'], TOKEN);
   assert.equal(lastHeaders['content-type'], 'application/json');
 });

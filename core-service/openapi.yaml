@@ -185,7 +185,7 @@ paths:
               type: object
               required: [group, contact]
               properties:
-                group: { type: string, pattern: '^[a-z0-9-]{2,40}$', example: sehatdekat }
+                group: { type: string, pattern: '^[a-z0-9-]{2,40}$' }
                 contact: { type: string, maxLength: 120, example: kontak@contoh.com }
                 tier: { type: string, enum: [partner], default: partner }
       responses:

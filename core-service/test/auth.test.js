@@ -28,7 +28,7 @@ const fakeAuthClient = {
     keyCalls.push(apiKey);
     if (authDown) throw errors.authUnavailable();
     return apiKey === 'jh_valid'
-      ? { valid: true, keyId: 'k1', group: 'sehatdekat', tier: 'partner' }
+      ? { valid: true, keyId: 'k1', group: 'g1', tier: 'partner' }
       : { valid: false };
   },
 };

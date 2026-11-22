@@ -11,6 +11,7 @@ Penentu waktu aman beraktivitas di luar ruangan. Microservice kelompok **fah**
 gateway/          Nginx: routing, rate limit, error JSON (Anggota S)
 auth-service/     registrasi, login JWT, API key (Anggota S)
 core-service/     penilaian risiko, data lingkungan, profil, rencana (Anggota N)
+mobile/           aplikasi React Native (Expo), lihat mobile/README.md (Anggota N)
 docs/             DEPLOY-STB.md
 scripts/          cek-stb.sh, backup.sh
 docker-compose.yml

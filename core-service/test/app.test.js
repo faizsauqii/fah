@@ -37,7 +37,7 @@ test('GET /api/core/health bisa diakses lewat prefix /api', async () => {
 });
 
 test('endpoint yang belum dibuat menjawab 501 dengan format error bersama', async () => {
-  const res = await fetch(`${baseUrl}/api/risk?lat=-6.89&lon=107.61&profile=umum`);
+  const res = await fetch(`${baseUrl}/api/me/health-profile`);
   assert.equal(res.status, 501);
   const body = await res.json();
   assert.deepEqual(Object.keys(body), ['error']);

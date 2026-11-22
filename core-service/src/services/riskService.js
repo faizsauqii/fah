@@ -13,6 +13,35 @@ export const ASSESSMENT_BASIS = Object.freeze([
 
 export const roundCoordinate = (value) => Math.round(value * 100) / 100;
 
+function describeHour(h, profile, offset) {
+  const result = assessHour(h, profile);
+  const air = result.factors.air;
+  return {
+    time: toOffsetIso(h.epochMs, offset),
+    level: result.level,
+    pm25: h.pm25,
+    pm10: h.pm10,
+    uvIndex: h.uvIndex,
+    temperature: h.temperature,
+    humidity: h.humidity,
+    heatIndex: result.factors.heat?.heatIndex ?? null,
+    ispu: air?.ispu ?? null,
+    ispuCategory: air?.categoryLabel ?? null,
+    factors: {
+      air: air
+        ? { level: air.level, ispu: air.ispu, category: air.categoryLabel, criticalParameter: air.criticalParameter }
+        : null,
+      uv: result.factors.uv,
+      heat: result.factors.heat,
+    },
+    missing: result.missing,
+    epochMs: h.epochMs,
+    localHour: localHourOf(h.epochMs, offset),
+  };
+}
+
+const publicHour = ({ epochMs, localHour, ...rest }) => rest;
+
 export function createRiskService({ openMeteo, envCache, now = () => Date.now() }) {
   async function loadConditions(lat, lon) {
     const key = `${lat.toFixed(2)},${lon.toFixed(2)}`;
@@ -33,37 +62,9 @@ export function createRiskService({ openMeteo, envCache, now = () => Date.now() 
     if (startIndex < 0) throw errors.upstreamUnavailable('Prakiraan untuk jam saat ini belum tersedia.');
 
     const offset = data.utcOffsetSeconds;
-    const hours = data.hours.slice(startIndex, startIndex + FORECAST_HOURS).map((h) => {
-      const result = assessHour(h, profile);
-      return {
-        time: toOffsetIso(h.epochMs, offset),
-        level: result.level,
-        pm25: h.pm25,
-        pm10: h.pm10,
-        uvIndex: h.uvIndex,
-        temperature: h.temperature,
-        humidity: h.humidity,
-        heatIndex: result.factors.heat?.heatIndex ?? null,
-        ispu: result.factors.air?.ispu ?? null,
-        ispuCategory: result.factors.air?.categoryLabel ?? null,
-        factors: {
-          air: result.factors.air
-            ? {
-                level: result.factors.air.level,
-                ispu: result.factors.air.ispu,
-                category: result.factors.air.categoryLabel,
-                criticalParameter: result.factors.air.criticalParameter,
-              }
-            : null,
-          uv: result.factors.uv,
-          heat: result.factors.heat,
-        },
-        missing: result.missing,
-        epochMs: h.epochMs,
-        localHour: localHourOf(h.epochMs, offset),
-      };
-    });
-
+    const hours = data.hours
+      .slice(startIndex, startIndex + FORECAST_HOURS)
+      .map((h) => describeHour(h, profile, offset));
     const window = findGreenWindow(hours);
 
     return {
@@ -77,11 +78,42 @@ export function createRiskService({ openMeteo, envCache, now = () => Date.now() 
             hours: window.length,
           }
         : null,
-      hours: hours.map(({ epochMs, localHour, ...rest }) => rest),
+      hours: hours.map(publicHour),
       basis: ASSESSMENT_BASIS,
       source: 'Open-Meteo (Air Quality API dan Forecast API)',
     };
   }
 
-  return { assess };
+  async function assessRange({ lat, lon, profile, fromMs, toMs }) {
+    const gridLat = roundCoordinate(lat);
+    const gridLon = roundCoordinate(lon);
+    const data = await loadConditions(gridLat, gridLon);
+    const offset = data.utcOffsetSeconds;
+
+    const firstHourMs = Math.floor(fromMs / HOUR_MS) * HOUR_MS;
+    const expectedHours = Math.ceil((toMs - firstHourMs) / HOUR_MS);
+    const hours = data.hours
+      .filter((h) => h.epochMs < toMs && h.epochMs + HOUR_MS > fromMs)
+      .map((h) => describeHour(h, profile, offset));
+
+    const window = findGreenWindow(hours, { fromHour: 0, toHour: 24 });
+    const coverage = hours.length === 0 ? 'NONE' : hours.length < expectedHours ? 'PARTIAL' : 'FULL';
+
+    return {
+      location: { lat: gridLat, lon: gridLon, timezone: data.timezone },
+      profile,
+      coverage,
+      recommendation: window
+        ? {
+            start: toOffsetIso(Math.max(window.first.epochMs, fromMs), offset),
+            end: toOffsetIso(Math.min(window.last.epochMs + HOUR_MS, toMs), offset),
+            hours: window.length,
+          }
+        : null,
+      hours: hours.map(publicHour),
+      basis: ASSESSMENT_BASIS,
+    };
+  }
+
+  return { assess, assessRange };
 }

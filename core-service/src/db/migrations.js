@@ -41,4 +41,12 @@ export const migrations = [
       CREATE INDEX idx_activity_plans_user ON activity_plans(user_id);
     `,
   },
+  {
+    version: 2,
+    name: 'offset_waktu_rencana',
+    sql: `
+      ALTER TABLE activity_plans ADD COLUMN utc_offset_minutes INTEGER NOT NULL DEFAULT 0;
+      CREATE INDEX idx_activity_plans_location ON activity_plans(location_id);
+    `,
+  },
 ];

@@ -2,7 +2,7 @@ import { errors } from '../errors.js';
 
 const AIR_QUALITY_URL = 'https://air-quality-api.open-meteo.com/v1/air-quality';
 const FORECAST_URL = 'https://api.open-meteo.com/v1/forecast';
-const FORECAST_DAYS = 3;
+const FORECAST_DAYS = 5;
 
 const numberOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 

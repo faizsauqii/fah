@@ -36,6 +36,15 @@ test('production dengan INTERNAL_TOKEN sama dengan JWT_SECRET gagal start', () =
   assert.throws(() => loadConfig(), /harus berbeda/);
 });
 
+test('development: nilai kosong di .env memakai default dev', () => {
+  process.env.NODE_ENV = 'development';
+  process.env.JWT_SECRET = '';
+  process.env.INTERNAL_TOKEN = '';
+  const config = loadConfig();
+  assert.ok(config.jwt.secret.length >= 32);
+  assert.ok(config.auth.internalToken.length >= 32);
+});
+
 test('production dengan konfigurasi lengkap berhasil', () => {
   process.env.NODE_ENV = 'production';
   process.env.JWT_SECRET = SECRET;

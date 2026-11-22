@@ -1,6 +1,3 @@
-// Membaca konfigurasi dari environment. Semua nilai rahasia datang dari .env,
-// tidak pernah ditulis di kode.
-
 function required(name) {
   const value = process.env[name];
   if (!value) {
@@ -25,16 +22,15 @@ export function loadConfig() {
 
   const jwtSecret = isProduction
     ? required('JWT_SECRET')
-    : process.env.JWT_SECRET ?? 'dev-only-secret-jangan-dipakai-di-stb-000000';
+    : process.env.JWT_SECRET || 'dev-only-secret-jangan-dipakai-di-stb-000000';
 
   if (isProduction && jwtSecret.length < 32) {
     throw new Error('JWT_SECRET minimal 32 karakter.');
   }
 
-  // Token untuk memanggil endpoint /internal/ di auth-service (header X-Internal-Token).
   const internalToken = isProduction
     ? required('INTERNAL_TOKEN')
-    : process.env.INTERNAL_TOKEN ?? 'dev-only-internal-token-jangan-dipakai-000';
+    : process.env.INTERNAL_TOKEN || 'dev-only-internal-token-jangan-dipakai-000';
 
   if (isProduction && internalToken.length < 32) {
     throw new Error('INTERNAL_TOKEN minimal 32 karakter.');
@@ -60,7 +56,7 @@ export function loadConfig() {
     }),
     openMeteo: Object.freeze({
       userAgent:
-        process.env.OPEN_METEO_USER_AGENT ?? 'JamHijau/0.1 (kelompok-jamhijau K02)',
+        process.env.OPEN_METEO_USER_AGENT ?? 'JamHijau/1.0 (kelompok-fah K02)',
       timeoutMs: intFromEnv('OPEN_METEO_TIMEOUT_MS', 5000),
     }),
     envCacheTtlMinutes: intFromEnv('ENV_CACHE_TTL_MINUTES', 60),

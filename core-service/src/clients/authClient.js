@@ -1,11 +1,3 @@
-// Klien ke endpoint internal auth-service untuk verifikasi API key
-// (POST /internal/api-keys/verify).
-//
-// - Mengirim header X-Internal-Token dari env INTERNAL_TOKEN.
-// - Hasil (valid maupun tidak) di-cache per hash SHA-256 key, bukan key asli.
-// - Gagal menghubungi auth-service, atau token internal ditolak, berarti
-//   503 AUTH_UNAVAILABLE. API key tidak pernah dianggap valid saat ragu.
-
 import { createHash } from 'node:crypto';
 import { errors } from '../errors.js';
 
@@ -30,7 +22,7 @@ export function createAuthClient({
   }
 
   const verifyUrl = new URL(VERIFY_PATH, internalUrl).toString();
-  const cache = new Map(); // hash -> { result, expiresAt }
+  const cache = new Map();
 
   function readCache(hash) {
     const entry = cache.get(hash);
@@ -43,17 +35,12 @@ export function createAuthClient({
   }
 
   function writeCache(hash, result) {
-    // Map menyimpan urutan sisip; hapus entri tertua jika penuh.
     if (cache.size >= MAX_CACHE_ENTRIES) {
       cache.delete(cache.keys().next().value);
     }
     cache.set(hash, { result, expiresAt: now() + apiKeyCacheSeconds * 1000 });
   }
 
-  /**
-   * @param {string} apiKey nilai header X-API-Key
-   * @returns {Promise<{valid: true, keyId: string, group: string, tier: string} | {valid: false}>}
-   */
   async function verifyApiKey(apiKey) {
     if (typeof apiKey !== 'string' || apiKey.length === 0 || apiKey.length > 200) {
       return { valid: false };

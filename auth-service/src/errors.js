@@ -1,4 +1,4 @@
-// Format error bersama (docs/KESEPAKATAN-TEKNIS.md bagian 4):
+// Format error bersama (KESEPAKATAN-TEKNIS.md bagian 4, disimpan di luar repo):
 // { "error": { "code": "...", "message": "...", "details": [...] } }
 
 export class AppError extends Error {

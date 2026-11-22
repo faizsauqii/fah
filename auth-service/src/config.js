@@ -20,7 +20,7 @@ export function loadConfig() {
 
   const jwtSecret = isProduction
     ? required('JWT_SECRET')
-    : process.env.JWT_SECRET ?? 'dev-only-secret-jangan-dipakai-di-stb-000000';
+    : process.env.JWT_SECRET || 'dev-only-secret-jangan-dipakai-di-stb-000000';
   if (isProduction && jwtSecret.length < 32) throw new Error('JWT_SECRET minimal 32 karakter.');
 
   // Token untuk endpoint /internal/ (header X-Internal-Token), wajib sejak revisi 2 kontrak.

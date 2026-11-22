@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { pingDatabase } from '../db/index.js';
 
-// GET /healthz: untuk healthcheck Docker di jaringan internal (tidak lewat gateway).
-// GET /api/core/health: sama, tapi bisa dicek dari luar lewat gateway.
 export function healthRouter({ db }) {
   const router = Router();
 

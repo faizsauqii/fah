@@ -39,7 +39,7 @@ services:
     cpus: 0.25
     # Tidak ada `ports:`. Hanya gateway dan core-service yang memanggilnya.
 
-  core-service:            # dari docs/compose-core-service.snippet.yml (Anggota N)
+  core-service:            # Anggota N
     build: ./core-service
     restart: unless-stopped
     env_file: .env

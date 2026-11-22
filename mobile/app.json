@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "JamHijau",
+    "slug": "fah",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "id.ac.itb.s18224050.fah"
+    },
+    "android": {
+      "package": "id.ac.itb.s18224050.fah",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "backgroundColor": "#1B7A43",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "JamHijau memakai lokasimu untuk menilai risiko kondisi udara dan UV di sekitarmu."
+        }
+      ],
+      "expo-asset"
+    ]
+  }
+}

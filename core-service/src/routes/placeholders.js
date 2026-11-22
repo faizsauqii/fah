@@ -5,9 +5,6 @@ export function placeholderRouter() {
   const router = Router();
   const notYet = (_req, _res, next) => next(errors.notImplemented());
 
-  router.get('/api/risk', notYet);
-  router.get('/api/profiles', notYet);
-
   router.get('/api/me/health-profile', notYet);
   router.put('/api/me/health-profile', notYet);
 

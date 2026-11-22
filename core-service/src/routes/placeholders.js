@@ -1,10 +1,6 @@
 import { Router } from 'express';
 import { errors } from '../errors.js';
 
-// Endpoint yang sudah ada di kontrak tapi belum dibuat. Menjawab 501 dengan
-// format error bersama, supaya Anggota S sudah bisa menguji routing Nginx
-// (/api/* -> core-service) sebelum logikanya selesai.
-// Hapus baris yang bersangkutan setiap kali endpoint aslinya selesai.
 export function placeholderRouter() {
   const router = Router();
   const notYet = (_req, _res, next) => next(errors.notImplemented());

@@ -4,7 +4,6 @@ import http from 'node:http';
 import { createAuthClient } from '../src/clients/authClient.js';
 import { AppError } from '../src/errors.js';
 
-// Stub auth-service yang meniru kontrak POST /internal/api-keys/verify (header X-Internal-Token).
 const TOKEN = 'token-internal-uji-0123456789abcdef0123';
 const VALID_KEY = 'jh_kunci-valid-untuk-uji';
 let server;

@@ -1,6 +1,3 @@
-// Format error bersama semua service (gateway, auth-service, core-service):
-// { "error": { "code": "...", "message": "...", "details": [...] } }
-
 export class AppError extends Error {
   constructor(status, code, message, details) {
     super(message);
@@ -34,9 +31,7 @@ export function notFoundHandler(req, _res, next) {
   next(errors.notFound(`Path ${req.method} ${req.path} tidak ada.`));
 }
 
-// Express 5 meneruskan error dari handler async ke sini secara otomatis.
 export function errorHandler(err, _req, res, _next) {
-  // JSON body yang rusak dari express.json()
   if (err?.type === 'entity.parse.failed') {
     return res
       .status(400)

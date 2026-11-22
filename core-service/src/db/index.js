@@ -1,6 +1,3 @@
-// Koneksi SQLite memakai modul bawaan node:sqlite (tanpa kompilasi native,
-// aman untuk STB ARM). Skema dibuat lewat migrasi berurutan di migrations.js.
-
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -14,7 +11,6 @@ export function openDatabase(dbPath) {
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA foreign_keys = ON;');
   if (dbPath !== ':memory:') {
-    // WAL: baca dan tulis bisa jalan bersamaan, lebih tahan jika listrik padam.
     db.exec('PRAGMA journal_mode = WAL;');
   }
   db.exec('PRAGMA busy_timeout = 5000;');
